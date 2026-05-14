@@ -257,10 +257,10 @@ export async function handleAutocompleteAfterFill(
     }
 
     if (bestIndex < 0 || bestScore < 40) {
-      // Suggestions appeared but nothing matched — dismiss and keep typed value
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-      input.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Escape', bubbles: true }));
-      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, buttons: 1 }));
+      // Suggestions appeared but nothing matched — blur to close without pressing Escape.
+      // Escape resets React-select to its previous value (e.g. "No"), which would overwrite
+      // what we just typed.
+      (input as HTMLElement).blur();
       return;
     }
 

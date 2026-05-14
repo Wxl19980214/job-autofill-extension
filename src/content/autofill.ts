@@ -157,6 +157,18 @@ function fillRadioGroup(field: DetectedField, value: string): boolean {
   return false;
 }
 
+// If an <input> is nested inside a custom dropdown control (e.g. the search box
+// inside a React-select), return the control element so we can open+click the
+// option instead of typing into the raw input (which would trigger Escape/blur resets).
+function findParentCustomDropdown(el: HTMLElement): HTMLElement | null {
+  let node: HTMLElement | null = el.parentElement;
+  for (let depth = 0; depth < 5 && node; depth++) {
+    if (isCustomDropdown(node)) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
 // ── Track helpers ─────────────────────────────────────────────────────────────
 
 // Track 1: fill a single non-custom-dropdown field. Async only because text inputs
@@ -200,8 +212,18 @@ async function fillTrack1Field(
     return;
   }
 
-  // Plain text inputs — fill value then handle any autocomplete that appears
+  // Plain text inputs — but first check if this input is nested inside a custom
+  // dropdown control (e.g. the search input inside a React-select).  If so, delegate
+  // to fillCustomDropdown on the control element instead of typing into the input,
+  // which would open the dropdown and then wrongly reset it on blur/Escape.
   if (strVal) {
+    const parentControl = findParentCustomDropdown(element);
+    if (parentControl) {
+      const ok = await fillCustomDropdown(parentControl, strVal);
+      if (ok) result.filled++;
+      else result.skipped++;
+      return;
+    }
     setNativeValue(element, strVal);
     await handleAutocompleteAfterFill(element, strVal);
     result.filled++;

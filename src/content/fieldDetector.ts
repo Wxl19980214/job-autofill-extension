@@ -113,14 +113,37 @@ function isVisible(el: HTMLElement): boolean {
   return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
 }
 
+// Skip elements that are clearly interactive controls, not data entry fields
+function isButtonLike(el: HTMLElement): boolean {
+  const role = el.getAttribute('role') ?? '';
+  if (role === 'button' || role === 'link' || role === 'menuitem') return true;
+
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'button' || tag === 'a') return true;
+
+  // Inputs that look like buttons by class name
+  const cls = (el.className ?? '').toString().toLowerCase();
+  if (
+    cls.includes('btn') ||
+    cls.includes('button') ||
+    cls.includes('attach') ||
+    cls.includes('upload') ||
+    cls.includes('dropbox') ||
+    cls.includes('google-drive') ||
+    cls.includes('cloud')
+  ) return true;
+
+  return false;
+}
+
 export function detectFields(): DetectedField[] {
   const elements = Array.from(document.querySelectorAll<HTMLElement>(ALL_SELECTORS));
   const fields: DetectedField[] = [];
 
   for (const el of elements) {
-    // Skip radio buttons — group logic is out of MVP scope
-    if ((el as HTMLInputElement).type === 'radio') continue;
+    if ((el as HTMLInputElement).type === 'radio') continue; // radio group logic is future work
     if (!isVisible(el)) continue;
+    if (isButtonLike(el)) continue;
 
     const fieldType    = getFieldType(el);
     const signals      = extractSignals(el);

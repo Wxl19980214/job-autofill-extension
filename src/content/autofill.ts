@@ -126,56 +126,36 @@ async function fillHighConfidenceField(
   const rawVal = enriched[profileKey];
   const strVal = resolveStringValue(enriched, field);
 
-  // Custom (non-native) dropdown — click-to-open approach
   if (fieldType !== 'select' && fieldType !== 'checkbox' && isCustomDropdown(element)) {
     if (strVal) {
       const ok = await fillCustomDropdown(element, strVal);
-      if (ok) {
-        highlightFilled(element, profileKey);
-        result.filled++;
-      } else {
-        highlightAmbiguous(element);
-        result.skipped++;
-      }
+      if (ok) result.filled++;
+      else     result.skipped++;
     }
     return;
   }
 
   if (fieldType === 'select') {
-    if (strVal && fillSelect(element as HTMLSelectElement, strVal)) {
-      highlightFilled(element, profileKey);
-      result.filled++;
-    } else {
-      highlightAmbiguous(element);
-      result.skipped++;
-    }
+    if (strVal && fillSelect(element as HTMLSelectElement, strVal)) result.filled++;
+    else result.skipped++;
   } else if (fieldType === 'checkbox') {
     if (typeof rawVal === 'boolean') {
       fillCheckbox(element as HTMLInputElement, rawVal);
-      highlightFilled(element, profileKey);
       result.filled++;
     } else {
       result.skipped++;
     }
   } else if (fieldType === 'contenteditable') {
-    if (strVal) {
-      fillContentEditable(element, strVal);
-      highlightFilled(element, profileKey);
-      result.filled++;
-    } else {
-      result.skipped++;
-    }
+    if (strVal) { fillContentEditable(element, strVal); result.filled++; }
+    else result.skipped++;
   } else {
-    if (strVal) {
-      setNativeValue(element, strVal);
-      highlightFilled(element, profileKey);
-      result.filled++;
-    } else {
-      result.skipped++;
-    }
+    if (strVal) { setNativeValue(element, strVal); result.filled++; }
+    else result.skipped++;
   }
 }
 
+// Autofill runs silently — no borders or tooltips injected into the page.
+// Visual feedback only appears when the user explicitly clicks "Highlight Detected Fields".
 export async function autofillPage(profile: UserProfile, allowOverwrite = false): Promise<AutofillResult> {
   clearHighlights();
   const enriched = enrichProfile(profile);
@@ -188,20 +168,11 @@ export async function autofillPage(profile: UserProfile, allowOverwrite = false)
       continue;
     }
 
-    const { confidence, profileKey, element } = field;
+    const { confidence, profileKey } = field;
 
     if (confidence >= CONFIDENCE_THRESHOLD_HIGH && profileKey) {
       await fillHighConfidenceField(field, enriched, result);
-    } else if (confidence >= CONFIDENCE_THRESHOLD_LOW && profileKey) {
-      const strVal = resolveStringValue(enriched, field);
-      if (strVal) {
-        highlightSuggested(element, profileKey, strVal);
-        result.suggested++;
-      } else {
-        result.skipped++;
-      }
-    } else if (profileKey) {
-      highlightAmbiguous(element);
+    } else {
       result.skipped++;
     }
   }

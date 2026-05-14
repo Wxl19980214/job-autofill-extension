@@ -304,6 +304,42 @@ export const MATCH_RULES: MatchRule[] = [
     weight: 0.88,
   },
 
+  // ── Consent / background questions ────────────────────────────────────────
+  {
+    key: 'previousEmployee',
+    patterns: [
+      /have you (ever |previously )?worked (at|for)/i,
+      /previous (employee|employment|experience) (at|with)/i,
+      /prior (employee|employment)/i,
+      /formerly (employed|worked)/i,
+    ],
+    weight: 0.88,
+  },
+  {
+    key: 'privacyAcknowledgement',
+    patterns: [
+      /privacy\s*(acknowledgement|acknowledge|notice|policy)/i,
+      /applicant\s*privacy/i,
+      /i have read\s*(and\s*understand)?/i,
+      /read\s*(and\s*(understand|agree))/i,
+      /data\s*(protection|privacy)\s*(acknowledgement|consent)/i,
+    ],
+    weight: 0.88,
+  },
+  {
+    key: 'smsContact',
+    patterns: [
+      /\bsms\b/i,
+      /\bwhatsapp\b/i,
+      /contact.*text\s*message/i,
+      /text\s*message.*contact/i,
+      /reach.*via.*sms/i,
+      /contact.*via.*sms/i,
+      /sms.*whatsapp/i,
+    ],
+    weight: 0.90,
+  },
+
   // ── EEO / Self-identification ──────────────────────────────────────────────
   // Values are fuzzy-matched, so "Asian" matches "Asian (not Hispanic or Latino)"
   {

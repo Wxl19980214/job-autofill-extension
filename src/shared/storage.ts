@@ -26,9 +26,10 @@ export const DEFAULT_PROFILE: UserProfile = {
   requiresSponsorship: true,
   authorizedToWork: true, // H1B holders are authorized to work
 
-  // Education
-  school: 'University of Michigan, Ann Arbor',
-  degree: 'Master of Science',
+  // Education — values use short forms that fuzzy-match common dropdown options
+  // e.g. "Master's" matches "Master's degree or equivalent"
+  school: 'University of Michigan Ann Arbor',
+  degree: "Master's",
   major: 'Computer Science',
   graduationYear: '2023',
 
@@ -43,8 +44,13 @@ export const DEFAULT_PROFILE: UserProfile = {
     'real-time streaming pipelines supporting millions of records.',
   howUseAI: '',
 
+  // Common consent / background questions
+  previousEmployee: 'No',
+  privacyAcknowledgement: 'Yes',
+  smsContact: 'Yes',
+
   // EEO — values are fuzzy-matched against dropdown option text
-  eeoGender: 'Man',
+  eeoGender: 'Male',
   eeoRace: 'Asian',
   eeoHispanic: 'No',
   eeoVeteran: 'I am not a protected veteran',

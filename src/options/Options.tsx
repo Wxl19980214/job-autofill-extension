@@ -293,6 +293,22 @@ export default function Options() {
         )}
       </div>
 
+      {/* ── Consent / Background ── */}
+      <Section title="Consent & Background Questions">
+        <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8, lineHeight: 1.5 }}>
+          These cover common yes/no dropdowns: privacy acknowledgements, SMS opt-in, previous employment.
+        </p>
+        <Field label="Have you worked here before?" hint='"No" for most applications'>
+          <TextInput profile={profile} k="previousEmployee" update={u} />
+        </Field>
+        <Field label="Privacy Acknowledgement" hint='"Yes" = I have read the privacy notice'>
+          <TextInput profile={profile} k="privacyAcknowledgement" update={u} />
+        </Field>
+        <Field label="SMS / WhatsApp Contact" hint='"Yes" = OK to contact via text'>
+          <TextInput profile={profile} k="smsContact" update={u} />
+        </Field>
+      </Section>
+
       {/* ── EEO / Self-identification ── */}
       <Section title="EEO / Self-Identification">
         <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8, lineHeight: 1.5 }}>

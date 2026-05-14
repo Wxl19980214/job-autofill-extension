@@ -159,38 +159,46 @@ function getAutocompleteSuggestions(): HTMLElement[] {
  * Call this after setting the value of a text input.
  * If an autocomplete/suggestion dropdown appears, we click the best match.
  * If nothing useful appears, we dismiss it so our typed value stays intact.
+ *
+ * Retries up to maxRetries times so slow server-side typeaheads (like
+ * Greenhouse's school lookup) have enough time to return results.
  */
 export async function handleAutocompleteAfterFill(
   input: HTMLElement,
-  value: string
+  value: string,
+  maxRetries = 3,
+  waitPerRetryMs = 500,
 ): Promise<void> {
-  // Wait for the autocomplete service to respond
-  await sleep(400);
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    await sleep(waitPerRetryMs);
 
-  const suggestions = getAutocompleteSuggestions();
-  if (suggestions.length === 0) return; // no autocomplete appeared — done
+    const suggestions = getAutocompleteSuggestions();
+    if (suggestions.length === 0) continue; // not appeared yet — retry
 
-  let bestEl: HTMLElement | null = null;
-  let bestScore = 0;
+    let bestEl: HTMLElement | null = null;
+    let bestScore = 0;
 
-  for (const s of suggestions) {
-    const text  = s.textContent?.trim() ?? '';
-    const score = scoreOption(text, value);
-    if (score > bestScore) {
-      bestScore = score;
-      bestEl    = s;
+    for (const s of suggestions) {
+      const text  = s.textContent?.trim() ?? '';
+      const score = scoreOption(text, value);
+      if (score > bestScore) {
+        bestScore = score;
+        bestEl    = s;
+      }
     }
-  }
 
-  if (bestEl && bestScore >= 40) {
-    // Good match — click it
-    bestEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    bestEl.click();
-  } else {
-    // No good match — press Escape to dismiss so our text stays
+    if (bestEl && bestScore >= 40) {
+      // Good match found — click it and we're done
+      bestEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      bestEl.click();
+      return;
+    }
+
+    // Suggestions appeared but nothing good matched — dismiss and stop
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     input.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Escape', bubbles: true }));
-    // Also click outside to close any lingering dropdown
-    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    return;
   }
+  // maxRetries reached with no suggestions — field was a plain input, nothing to do
 }

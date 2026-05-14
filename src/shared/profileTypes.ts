@@ -39,6 +39,11 @@ export interface UserProfile {
   // Location
   country: string;
 
+  // Common yes/no consent and background questions
+  previousEmployee: string;       // "No" — have you worked here before?
+  privacyAcknowledgement: string; // "Yes" — I have read the privacy notice
+  smsContact: string;             // "Yes" — OK to contact via SMS/WhatsApp
+
   // EEO / self-identification (values should match the option text on the form,
   // partial matching is used so "Asian" matches "Asian (not Hispanic or Latino)")
   eeoGender: string;

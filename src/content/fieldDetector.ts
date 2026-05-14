@@ -30,9 +30,15 @@ function getFieldType(el: HTMLElement): FieldType {
   return 'text';
 }
 
+const PLACEHOLDER_PATTERN = /^(select\.{0,3}|choose\.{0,3}|--+|please select|pick one)$/i;
+
 function getCurrentValue(el: HTMLElement): string {
   if (el.isContentEditable) return el.textContent?.trim() ?? '';
-  return (el as HTMLInputElement).value?.trim() ?? '';
+  const val = (el as HTMLInputElement).value?.trim() ?? '';
+  // Some selects have placeholder options with non-empty values (e.g. value="Select ...")
+  // Treat these as unset so the field isn't skipped by the allowOverwrite check.
+  if (el.tagName === 'SELECT' && PLACEHOLDER_PATTERN.test(val)) return '';
+  return val;
 }
 
 // Walk up to find an associated <label> via multiple strategies

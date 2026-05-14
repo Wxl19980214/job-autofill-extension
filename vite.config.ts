@@ -7,6 +7,9 @@ import webExtension from 'vite-plugin-web-extension';
 // correctly for Manifest V3 — content scripts as IIFE, background as ESM
 // module, popup/options as standard Vite builds.
 export default defineConfig({
+  // Chrome extensions require relative asset paths — absolute paths ("/foo.js")
+  // don't resolve under chrome-extension:// origins.
+  base: '',
   plugins: [
     react(),
     webExtension({

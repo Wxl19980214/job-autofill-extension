@@ -46,11 +46,17 @@ export const MATCH_RULES: MatchRule[] = [
   {
     key: 'email',
     patterns: [
-      /\be[\s_-]?mail\b/i,
+      // Require specific context — plain "email" in a sentence like
+      // "contact you via the email you provided" must NOT match here.
+      /^e[\s_-]?mail$/i,                      // label is exactly "Email"
       /\bemail[\s_-]?address\b/i,
+      /\byour[\s_-]?e[\s_-]?mail\b/i,
       /\bwork[\s_-]?email\b/i,
+      /\bpersonal[\s_-]?email\b/i,
+      /\bcontact[\s_-]?email\b/i,
+      /\benter.*e[\s_-]?mail\b/i,
     ],
-    weight: 0.95,
+    weight: 0.93,
   },
   {
     key: 'phone',

@@ -138,15 +138,28 @@ const AUTOCOMPLETE_SELECTORS = [
   '[role="option"]',
   '[role="listitem"]',
   '[role="menuitem"]',
-  '.pac-item',               // Google Places Autocomplete
+  // Google Places Autocomplete
+  '.pac-item',
+  '.pac-item span',
+  // jQuery UI Autocomplete (used by Greenhouse for school typeahead)
+  '.ui-autocomplete li',
+  '.ui-menu-item',
+  '.ui-menu-item-wrapper',
+  // Twitter Typeahead / Bloodhound
+  '.tt-suggestion',
+  '.tt-selectable',
+  // Generic patterns
   '[class*="suggestion"]',
   '[class*="Suggestion"]',
   '[class*="autocomplete-item"]',
+  '[class*="AutocompleteItem"]',
   '[class*="typeahead"]',
   '[class*="combobox-option"]',
   '[class*="dropdown-item"]',
+  '[class*="DropdownItem"]',
   'ul[class*="results"] li',
   'ul[class*="options"] li',
+  'ul[class*="autocomplete"] li',
 ].join(', ');
 
 function getAutocompleteSuggestions(): HTMLElement[] {

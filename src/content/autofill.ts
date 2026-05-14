@@ -43,8 +43,11 @@ function resolveStringValue(profile: UserProfile, field: DetectedField): string 
 
 // ── DOM filling helpers ───────────────────────────────────────────────────────
 
-// Use the native value setter so React's synthetic event system picks up the change
+// Use the native value setter so React's synthetic event system picks up the change.
+// Also fires focus + keyboard events so typeahead/autocomplete widgets activate.
 function setNativeValue(el: HTMLElement, value: string) {
+  el.focus();
+
   const inputProto    = window.HTMLInputElement.prototype;
   const textareaProto = window.HTMLTextAreaElement.prototype;
   const setter =
@@ -58,9 +61,13 @@ function setNativeValue(el: HTMLElement, value: string) {
     (el as HTMLInputElement).value = value;
   }
 
+  // Fire events in the order a real user would produce them.
+  // keydown/keyup on the last character triggers typeahead search on many widgets.
+  const lastChar = value.slice(-1);
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: lastChar, bubbles: true }));
   el.dispatchEvent(new Event('input',  { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
-  el.dispatchEvent(new Event('blur',   { bubbles: true }));
+  el.dispatchEvent(new KeyboardEvent('keyup', { key: lastChar, bubbles: true }));
 }
 
 function fillContentEditable(el: HTMLElement, value: string) {

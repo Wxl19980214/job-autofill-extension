@@ -7,7 +7,7 @@ export const DEFAULT_PROFILE: UserProfile = {
   lastName: 'Wang',
   fullName: 'Xilin Wang',
   email: 'stinsionwang@gmail.com',
-  phone: '+1 734-968-8779',
+  phone: '734-968-8779',
   city: 'Austin',
   state: 'Texas',
   location: 'Austin, Texas',

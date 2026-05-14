@@ -142,8 +142,14 @@ export function detectFields(): DetectedField[] {
 
   for (const el of elements) {
     if ((el as HTMLInputElement).type === 'radio') continue; // radio group logic is future work
-    if (!isVisible(el)) continue;
     if (isButtonLike(el)) continue;
+
+    const tag = el.tagName.toLowerCase();
+    // Always process native <select> even when visually hidden — many sites
+    // (including Greenhouse) hide the real <select> with CSS and overlay a
+    // custom React/jQuery UI component on top, but the underlying <select>
+    // value can still be set programmatically.
+    if (tag !== 'select' && !isVisible(el)) continue;
 
     const fieldType    = getFieldType(el);
     const signals      = extractSignals(el);

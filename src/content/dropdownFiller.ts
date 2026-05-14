@@ -1,11 +1,20 @@
 // Handles non-native dropdown components: React-select, ARIA comboboxes,
 // Greenhouse custom selects, and other click-to-open menus.
 //
-// Strategy:
+// Also handles autocomplete dropdowns (Google Places, typeahead, etc.) that
+// appear after text is typed into an input field — if a dropdown appears we
+// either click the best matching option or dismiss it so our typed value stays.
+//
+// Strategy for explicit dropdowns:
 //  1. Click the trigger to open the dropdown
 //  2. Optionally type into a search box to filter options
 //  3. Find the best-matching option in the resulting list
 //  4. Click it
+//
+// Strategy for autocomplete-after-type:
+//  1. Wait for the suggestion list to appear in the DOM
+//  2. Find the best match; click it if score is good enough
+//  3. If no good match, dismiss with Escape so our typed text stays
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -122,4 +131,66 @@ export async function fillCustomDropdown(trigger: HTMLElement, value: string): P
   // Close the dropdown if nothing matched
   trigger.click();
   return false;
+}
+
+// Selectors for autocomplete / suggestion lists that appear after typing
+const AUTOCOMPLETE_SELECTORS = [
+  '[role="option"]',
+  '[role="listitem"]',
+  '[role="menuitem"]',
+  '.pac-item',               // Google Places Autocomplete
+  '[class*="suggestion"]',
+  '[class*="Suggestion"]',
+  '[class*="autocomplete-item"]',
+  '[class*="typeahead"]',
+  '[class*="combobox-option"]',
+  '[class*="dropdown-item"]',
+  'ul[class*="results"] li',
+  'ul[class*="options"] li',
+].join(', ');
+
+function getAutocompleteSuggestions(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>(AUTOCOMPLETE_SELECTORS)).filter(
+    (el) => el.offsetParent !== null
+  );
+}
+
+/**
+ * Call this after setting the value of a text input.
+ * If an autocomplete/suggestion dropdown appears, we click the best match.
+ * If nothing useful appears, we dismiss it so our typed value stays intact.
+ */
+export async function handleAutocompleteAfterFill(
+  input: HTMLElement,
+  value: string
+): Promise<void> {
+  // Wait for the autocomplete service to respond
+  await sleep(400);
+
+  const suggestions = getAutocompleteSuggestions();
+  if (suggestions.length === 0) return; // no autocomplete appeared — done
+
+  let bestEl: HTMLElement | null = null;
+  let bestScore = 0;
+
+  for (const s of suggestions) {
+    const text  = s.textContent?.trim() ?? '';
+    const score = scoreOption(text, value);
+    if (score > bestScore) {
+      bestScore = score;
+      bestEl    = s;
+    }
+  }
+
+  if (bestEl && bestScore >= 40) {
+    // Good match — click it
+    bestEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    bestEl.click();
+  } else {
+    // No good match — press Escape to dismiss so our text stays
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    input.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Escape', bubbles: true }));
+    // Also click outside to close any lingering dropdown
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  }
 }

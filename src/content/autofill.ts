@@ -9,12 +9,14 @@ import {
   highlightAmbiguous,
   clearHighlights,
 } from './highlighter';
-import { isCustomDropdown, fillCustomDropdown } from './dropdownFiller';
+import { isCustomDropdown, fillCustomDropdown, handleAutocompleteAfterFill } from './dropdownFiller';
 import { CONFIDENCE_THRESHOLD_HIGH, CONFIDENCE_THRESHOLD_LOW } from '../shared/constants';
 
 // ── Value resolution ──────────────────────────────────────────────────────────
 
-// Before filling, derive missing composite fields from atomic ones
+// Before filling, derive missing composite fields from atomic ones.
+// We also set city = "City, State" so that location autocomplete fields
+// (labeled "Location (City)") get a specific enough query to match correctly.
 function enrichProfile(p: UserProfile): UserProfile {
   const enriched = { ...p };
   if (!enriched.fullName && enriched.firstName && enriched.lastName) {
@@ -22,6 +24,11 @@ function enrichProfile(p: UserProfile): UserProfile {
   }
   if (!enriched.location && enriched.city && enriched.state) {
     enriched.location = `${enriched.city}, ${enriched.state}`;
+  }
+  // Use "City, State" for city-labeled fields that have an autocomplete —
+  // just "Austin" matches too many places globally; "Austin, Texas" is unambiguous
+  if (enriched.city && enriched.state && !enriched.city.includes(',')) {
+    enriched.city = `${enriched.city}, ${enriched.state}`;
   }
   return enriched;
 }
@@ -149,8 +156,14 @@ async function fillHighConfidenceField(
     if (strVal) { fillContentEditable(element, strVal); result.filled++; }
     else result.skipped++;
   } else {
-    if (strVal) { setNativeValue(element, strVal); result.filled++; }
-    else result.skipped++;
+    // Plain text input — fill the value, then handle any autocomplete dropdown that appears
+    if (strVal) {
+      setNativeValue(element, strVal);
+      await handleAutocompleteAfterFill(element, strVal);
+      result.filled++;
+    } else {
+      result.skipped++;
+    }
   }
 }
 

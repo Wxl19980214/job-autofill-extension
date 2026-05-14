@@ -264,19 +264,41 @@ export async function handleAutocompleteAfterFill(
       return;
     }
 
+    // Attempt 1: mousedown + click on best element — most reliable for React autocompletes.
+    // Greenhouse, Lever, and most React-based typeaheads close on mousedown, not just click.
+    const bestEl = suggestions[bestIndex];
+    if (bestEl && bestEl.offsetParent !== null) {
+      const mo: MouseEventInit = { bubbles: true, cancelable: true, button: 0, buttons: 1 };
+      bestEl.dispatchEvent(new MouseEvent('mousedown', mo));
+      bestEl.dispatchEvent(new MouseEvent('mouseup',   mo));
+      bestEl.click();
+      await sleep(120);
+      if (getAutocompleteSuggestions().length === 0) return;
+    }
+
     input.focus();
 
-    // Attempt 1: smart keyboard navigation (accounts for autoFocus pre-highlighting)
+    // Attempt 2: keyboard navigation + Enter
     navigateToAndConfirm(input, suggestions, bestIndex);
     await sleep(150);
     if (getAutocompleteSuggestions().length === 0) return;
 
-    // Attempt 2: click the widget's own highlighted element
+    // Attempt 3: click whatever the widget visually highlighted
     if (clickActiveOption()) return;
 
-    // Attempt 3: direct click on best element
-    const bestEl = suggestions[bestIndex];
-    if (bestEl && bestEl.offsetParent !== null) { bestEl.click(); return; }
+    // Attempt 4: re-query and click fresh reference (handles React re-renders)
+    const fresh = deduplicateByText(getAutocompleteSuggestions());
+    let freshBest = -1, freshScore = 0;
+    for (let i = 0; i < fresh.length; i++) {
+      const s = scoreOption(fresh[i].textContent?.trim() ?? '', value);
+      if (s > freshScore) { freshScore = s; freshBest = i; }
+    }
+    if (freshBest >= 0 && freshScore >= 40 && fresh[freshBest].offsetParent !== null) {
+      const mo: MouseEventInit = { bubbles: true, cancelable: true, button: 0, buttons: 1 };
+      fresh[freshBest].dispatchEvent(new MouseEvent('mousedown', mo));
+      fresh[freshBest].dispatchEvent(new MouseEvent('mouseup',   mo));
+      fresh[freshBest].click();
+    }
 
     return;
   }

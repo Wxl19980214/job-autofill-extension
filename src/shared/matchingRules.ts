@@ -18,7 +18,7 @@ export const MATCH_RULES: MatchRule[] = [
       /\bfirst[\s_-]?name\b/i,
       /\bfname\b/i,
       /\bgiven[\s_-]?name\b/i,
-      /^first$/i,
+      /\bfirst\b/i,
     ],
     weight: 0.92,
   },
@@ -29,7 +29,7 @@ export const MATCH_RULES: MatchRule[] = [
       /\blname\b/i,
       /\bfamily[\s_-]?name\b/i,
       /\bsurname\b/i,
-      /^last$/i,
+      /\blast\b/i,
     ],
     weight: 0.92,
   },
@@ -37,7 +37,7 @@ export const MATCH_RULES: MatchRule[] = [
     key: 'fullName',
     patterns: [
       /\bfull[\s_-]?name\b/i,
-      /^name$/i,
+      /\bname\b/i,
       /\byour[\s_-]?name\b/i,
       /\bfull[\s_-]?legal[\s_-]?name\b/i,
     ],
@@ -46,17 +46,12 @@ export const MATCH_RULES: MatchRule[] = [
   {
     key: 'email',
     patterns: [
-      // Require specific context — plain "email" in a sentence like
-      // "contact you via the email you provided" must NOT match here.
-      /^e[\s_-]?mail$/i,                      // label is exactly "Email"
-      /\bemail[\s_-]?address\b/i,
-      /\byour[\s_-]?e[\s_-]?mail\b/i,
-      /\bwork[\s_-]?email\b/i,
-      /\bpersonal[\s_-]?email\b/i,
-      /\bcontact[\s_-]?email\b/i,
-      /\benter.*e[\s_-]?mail\b/i,
+      // Use word boundary so plain "email" label matches, but SMS label
+      // ("contact via the email you provided") is outweighed by smsContact rule
+      /\bemail\b/i,
+      /\be[\s_-]?mail[\s_-]?address\b/i,
     ],
-    weight: 0.93,
+    weight: 0.88,
   },
   {
     key: 'phone',
@@ -72,7 +67,7 @@ export const MATCH_RULES: MatchRule[] = [
   {
     key: 'city',
     patterns: [
-      /^city$/i,
+      /\bcity\b/i,
       /\bcity[\s_-]?name\b/i,
       /\btown\b/i,
       /\bcity[\s_-]?of[\s_-]?residence\b/i,
@@ -84,7 +79,7 @@ export const MATCH_RULES: MatchRule[] = [
   {
     key: 'state',
     patterns: [
-      /^state$/i,
+      /\bstate\b/i,
       /\bstate[\s_-]\/[\s_-]?province\b/i,
       /\bprovince\b/i,
     ],
@@ -103,7 +98,7 @@ export const MATCH_RULES: MatchRule[] = [
     key: 'location',
     patterns: [
       // Only match plain "location" — NOT "location (city)" which is handled by city rule above
-      /^location$/i,
+      /\blocation\b/i,
       /\bcity[\s,\/]?state\b/i,
       /\bwhere[\s_-]?are[\s_-]?you[\s_-]?(located|based)\b/i,
       /\bcurrent[\s_-]?location\b/i,
@@ -145,7 +140,7 @@ export const MATCH_RULES: MatchRule[] = [
       /\bemployer\b/i,
       /\bcompany[\s_-]?name\b/i,
       /\bwhere[\s_-]?do[\s_-]?you[\s_-]?work\b/i,
-      /^company$/i,
+      /\bcompany\b/i,
       /\bmost[\s_-]?recent[\s_-]?(company|employer)\b/i,
     ],
     weight: 0.85,
@@ -158,7 +153,7 @@ export const MATCH_RULES: MatchRule[] = [
       /\bcurrent[\s_-]?role\b/i,
       /\bcurrent[\s_-]?position\b/i,
       /\bmost[\s_-]?recent[\s_-]?title\b/i,
-      /^title$/i,
+      /\btitle\b/i,
     ],
     weight: 0.85,
   },
@@ -236,7 +231,7 @@ export const MATCH_RULES: MatchRule[] = [
   {
     key: 'degree',
     patterns: [
-      /^degree$/i,
+      /\bdegree\b/i,
       /\bdegree[\s_-]?type\b/i,
       /\bhighest[\s_-]?degree\b/i,
       /\blevel[\s_-]?of[\s_-]?education\b/i,
@@ -343,7 +338,7 @@ export const MATCH_RULES: MatchRule[] = [
       /contact.*via.*sms/i,
       /sms.*whatsapp/i,
     ],
-    weight: 0.90,
+    weight: 0.96,
   },
 
   // ── EEO / Self-identification ──────────────────────────────────────────────
@@ -359,9 +354,12 @@ export const MATCH_RULES: MatchRule[] = [
       /\brace\b/i,
       /\bracial[\s_-]?background\b/i,
       /\brace[\s_-]?\/[\s_-]?ethnicity\b/i,
+      /\brace[\s_-]?ethnicity\b/i,
+      /\bethnic[\s_-]?group\b/i,
       // Don't match plain "ethnicity" — covered by eeoHispanic below
     ],
-    weight: 0.85,
+    // Higher than eeoHispanic (0.90) so a "race" field isn't hijacked by hispanic patterns
+    weight: 0.93,
   },
   {
     key: 'eeoHispanic',

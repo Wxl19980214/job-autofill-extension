@@ -24,7 +24,8 @@ function scoreOption(optionText: string, target: string): number {
   const opt = normalize(optionText);
   if (opt === t)                               return 100;
   if (opt.startsWith(t) || t.startsWith(opt)) return 80;
-  if (opt.includes(t))                         return 60;
+  // Skip substring matches for very short targets (≤2 chars) — "no" in "latino", etc.
+  if (t.length > 2 && opt.includes(t))        return 60;
   if (t.includes(opt) && opt.length > 2)       return 40;
   return 0;
 }
@@ -238,8 +239,8 @@ function getAutocompleteSuggestions(): HTMLElement[] {
 export async function handleAutocompleteAfterFill(
   input: HTMLElement,
   value: string,
-  maxRetries = 3,
-  waitPerRetryMs = 150,
+  maxRetries = 6,
+  waitPerRetryMs = 250,
 ): Promise<void> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     await sleep(waitPerRetryMs);

@@ -83,7 +83,8 @@ function scoreOption(optText: string, optValue: string, target: string): number 
 
   if (txt === t || val === t) return 100;
   if (txt.startsWith(t) || t.startsWith(txt)) return 80;
-  if (txt.includes(t) || val.includes(t)) return 60;
+  // Skip substring matches for very short targets (≤2 chars) — "no" in "latino", "id" in "disability", etc.
+  if (t.length > 2 && (txt.includes(t) || val.includes(t))) return 60;
   if (t.includes(txt) && txt.length > 2) return 40;
   return 0;
 }
@@ -103,7 +104,10 @@ function fillSelect(el: HTMLSelectElement, value: string): boolean {
   }
 
   if (bestOpt && bestScore >= 40) {
-    el.value = bestOpt.value;
+    // Use native setter so React-controlled selects register the change
+    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+    if (nativeSetter) nativeSetter.call(el, bestOpt.value);
+    else el.value = bestOpt.value;
     el.dispatchEvent(new Event('change', { bubbles: true }));
     el.dispatchEvent(new Event('input',  { bubbles: true }));
     return true;

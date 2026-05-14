@@ -1,5 +1,9 @@
 // Orchestrates field detection, value resolution, and DOM filling.
-// Only fills high-confidence fields; highlights low-confidence ones.
+// High-confidence fields are filled; low-confidence ones are skipped silently.
+// Fill runs in two parallel tracks:
+//   Track 1 (Promise.all): text, select, checkbox, radio — instant, no conflicts
+//   Track 2 (sequential):  custom dropdowns — must stay sequential to avoid
+//                           two overlay menus opening simultaneously
 
 import type { UserProfile, DetectedField, AutofillResult } from '../shared/profileTypes';
 import { detectFields } from './fieldDetector';
@@ -14,9 +18,6 @@ import { CONFIDENCE_THRESHOLD_HIGH, CONFIDENCE_THRESHOLD_LOW } from '../shared/c
 
 // ── Value resolution ──────────────────────────────────────────────────────────
 
-// Before filling, derive missing composite fields from atomic ones.
-// We also set city = "City, State" so that location autocomplete fields
-// (labeled "Location (City)") get a specific enough query to match correctly.
 function enrichProfile(p: UserProfile): UserProfile {
   const enriched = { ...p };
   if (!enriched.fullName && enriched.firstName && enriched.lastName) {
@@ -25,8 +26,6 @@ function enrichProfile(p: UserProfile): UserProfile {
   if (!enriched.location && enriched.city && enriched.state) {
     enriched.location = `${enriched.city}, ${enriched.state}`;
   }
-  // Use "City, State" for city-labeled fields that have an autocomplete —
-  // just "Austin" matches too many places globally; "Austin, Texas" is unambiguous
   if (enriched.city && enriched.state && !enriched.city.includes(',')) {
     enriched.city = `${enriched.city}, ${enriched.state}`;
   }
@@ -43,8 +42,6 @@ function resolveStringValue(profile: UserProfile, field: DetectedField): string 
 
 // ── DOM filling helpers ───────────────────────────────────────────────────────
 
-// Use the native value setter so React's synthetic event system picks up the change.
-// Also fires focus + keyboard events so typeahead/autocomplete widgets activate.
 function setNativeValue(el: HTMLElement, value: string) {
   el.focus();
 
@@ -61,8 +58,6 @@ function setNativeValue(el: HTMLElement, value: string) {
     (el as HTMLInputElement).value = value;
   }
 
-  // Fire events in the order a real user would produce them.
-  // keydown/keyup on the last character triggers typeahead search on many widgets.
   const lastChar = value.slice(-1);
   el.dispatchEvent(new KeyboardEvent('keydown', { key: lastChar, bubbles: true }));
   el.dispatchEvent(new Event('input',  { bubbles: true }));
@@ -81,20 +76,18 @@ function normalizeForMatch(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-// Score how well an option matches the target value (0 = no match, higher = better)
 function scoreOption(optText: string, optValue: string, target: string): number {
   const t   = normalizeForMatch(target);
   const txt = normalizeForMatch(optText);
   const val = normalizeForMatch(optValue);
 
-  if (txt === t || val === t) return 100;           // exact
-  if (txt.startsWith(t) || t.startsWith(txt)) return 80; // prefix
-  if (txt.includes(t) || val.includes(t)) return 60;     // contains
-  if (t.includes(txt) && txt.length > 2) return 40;      // target contains option text
+  if (txt === t || val === t) return 100;
+  if (txt.startsWith(t) || t.startsWith(txt)) return 80;
+  if (txt.includes(t) || val.includes(t)) return 60;
+  if (t.includes(txt) && txt.length > 2) return 40;
   return 0;
 }
 
-// Tries to find the best-matching option using fuzzy scoring; returns true on success
 function fillSelect(el: HTMLSelectElement, value: string): boolean {
   const opts = Array.from(el.options).filter((o) => o.value !== '');
 
@@ -127,9 +120,44 @@ function fillCheckbox(el: HTMLInputElement, value: boolean) {
   }
 }
 
-// ── Main exports ──────────────────────────────────────────────────────────────
+// Fill a radio group: score each option's label against the resolved string value,
+// then click the best-matching option.
+function fillRadioGroup(field: DetectedField, value: string): boolean {
+  const options = field.radioOptions;
+  if (!options || options.length === 0) return false;
 
-async function fillHighConfidenceField(
+  let bestOption: HTMLInputElement | null = null;
+  let bestScore = 0;
+
+  for (const radio of options) {
+    const labelEl = radio.id
+      ? document.querySelector<HTMLElement>(`label[for="${CSS.escape(radio.id)}"]`)
+      : null;
+    const optionLabel = labelEl?.textContent?.trim() ?? radio.value ?? '';
+    const score = scoreOption(optionLabel, radio.value, value);
+    if (score > bestScore) {
+      bestScore = score;
+      bestOption = radio;
+    }
+  }
+
+  if (bestOption && bestScore >= 40) {
+    if (!bestOption.checked) {
+      bestOption.checked = true;
+      bestOption.dispatchEvent(new Event('change', { bubbles: true }));
+      bestOption.dispatchEvent(new Event('click',  { bubbles: true }));
+    }
+    return true;
+  }
+
+  return false;
+}
+
+// ── Track helpers ─────────────────────────────────────────────────────────────
+
+// Track 1: fill a single non-custom-dropdown field. Async only because text inputs
+// may trigger autocomplete handling; all other types return immediately.
+async function fillTrack1Field(
   field: DetectedField,
   enriched: UserProfile,
   result: AutofillResult
@@ -140,47 +168,94 @@ async function fillHighConfidenceField(
   const rawVal = enriched[profileKey];
   const strVal = resolveStringValue(enriched, field);
 
-  if (fieldType !== 'select' && fieldType !== 'checkbox' && isCustomDropdown(element)) {
-    if (strVal) {
-      const ok = await fillCustomDropdown(element, strVal);
-      if (ok) result.filled++;
-      else     result.skipped++;
-    }
+  if (fieldType === 'radio') {
+    if (strVal && fillRadioGroup(field, strVal)) result.filled++;
+    else result.skipped++;
     return;
   }
 
   if (fieldType === 'select') {
     if (strVal && fillSelect(element as HTMLSelectElement, strVal)) result.filled++;
     else result.skipped++;
-  } else if (fieldType === 'checkbox') {
+    return;
+  }
+
+  if (fieldType === 'checkbox') {
     if (typeof rawVal === 'boolean') {
       fillCheckbox(element as HTMLInputElement, rawVal);
       result.filled++;
     } else {
       result.skipped++;
     }
-  } else if (fieldType === 'contenteditable') {
+    return;
+  }
+
+  if (fieldType === 'contenteditable') {
     if (strVal) { fillContentEditable(element, strVal); result.filled++; }
     else result.skipped++;
+    return;
+  }
+
+  // Plain text inputs — fill value then handle any autocomplete that appears
+  if (strVal) {
+    setNativeValue(element, strVal);
+    await handleAutocompleteAfterFill(element, strVal);
+    result.filled++;
   } else {
-    // Plain text input — fill the value, then handle any autocomplete dropdown that appears
-    if (strVal) {
-      setNativeValue(element, strVal);
-      await handleAutocompleteAfterFill(element, strVal);
-      result.filled++;
-    } else {
-      result.skipped++;
-    }
+    result.skipped++;
   }
 }
 
-// Autofill runs silently — no borders or tooltips injected into the page.
-// Visual feedback only appears when the user explicitly clicks "Highlight Detected Fields".
+// Track 2: fill a single custom dropdown widget (called one at a time).
+async function fillTrack2Field(
+  field: DetectedField,
+  enriched: UserProfile,
+  result: AutofillResult
+): Promise<void> {
+  const { profileKey, element } = field;
+  if (!profileKey) return;
+
+  const strVal = resolveStringValue(enriched, field);
+
+  // If there's a native <select> inside the same container, Track 1 will handle it.
+  // Skip the custom overlay to avoid opening a menu that can't be cleanly closed.
+  const container = element.closest('.field, .form-group, [class*="field-wrapper"], [class*="fieldWrapper"]')
+    ?? element.parentElement?.parentElement;
+  const siblingSelect = container?.querySelector<HTMLSelectElement>('select');
+  if (siblingSelect) {
+    result.skipped++;
+    return;
+  }
+
+  if (strVal) {
+    const ok = await fillCustomDropdown(element, strVal);
+    if (ok) result.filled++;
+    else     result.skipped++;
+  } else {
+    result.skipped++;
+  }
+}
+
+async function fillSequentially(
+  fields: DetectedField[],
+  enriched: UserProfile,
+  result: AutofillResult
+): Promise<void> {
+  for (const field of fields) {
+    await fillTrack2Field(field, enriched, result);
+  }
+}
+
+// ── Main exports ──────────────────────────────────────────────────────────────
+
 export async function autofillPage(profile: UserProfile, allowOverwrite = false): Promise<AutofillResult> {
   clearHighlights();
   const enriched = enrichProfile(profile);
   const fields   = detectFields();
   const result: AutofillResult = { filled: 0, suggested: 0, skipped: 0 };
+
+  const track1: DetectedField[] = [];
+  const track2: DetectedField[] = [];
 
   for (const field of fields) {
     if (field.currentValue && !allowOverwrite) {
@@ -188,20 +263,32 @@ export async function autofillPage(profile: UserProfile, allowOverwrite = false)
       continue;
     }
 
-    const { confidence, profileKey } = field;
+    const { confidence, profileKey, fieldType, element } = field;
 
-    if (confidence >= CONFIDENCE_THRESHOLD_HIGH && profileKey) {
-      await fillHighConfidenceField(field, enriched, result);
-    } else {
+    if (confidence < CONFIDENCE_THRESHOLD_HIGH || !profileKey) {
       result.skipped++;
+      continue;
+    }
+
+    // Route to Track 2 only for non-native custom dropdown widgets
+    if (fieldType !== 'select' && fieldType !== 'checkbox' && fieldType !== 'radio' && isCustomDropdown(element)) {
+      track2.push(field);
+    } else {
+      track1.push(field);
     }
   }
+
+  // Both tracks start concurrently. Track 1 finishes near-instantly.
+  // Track 2 runs its custom dropdown queue while Track 1 is already done.
+  await Promise.all([
+    Promise.all(track1.map((f) => fillTrack1Field(f, enriched, result))),
+    fillSequentially(track2, enriched, result),
+  ]);
 
   return result;
 }
 
 export function highlightAllFields(profile: UserProfile): void {
-  // Synchronous preview — shows what would be filled without actually filling
   clearHighlights();
   const enriched = enrichProfile(profile);
   const fields   = detectFields();

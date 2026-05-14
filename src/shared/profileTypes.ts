@@ -64,15 +64,17 @@ export type FieldType =
   | 'textarea'
   | 'select'
   | 'checkbox'
+  | 'radio'
   | 'contenteditable';
 
 export interface DetectedField {
-  element: HTMLElement;
+  element: HTMLElement;        // for radio: the fieldset/container; for others: the input itself
   fieldType: FieldType;
-  signals: string;        // normalized combined label/name/placeholder — for debug
+  signals: string;             // normalized combined label/name/placeholder — for debug
   profileKey: ProfileKey | null;
-  confidence: number;     // 0–1
+  confidence: number;          // 0–1
   currentValue: string;
+  radioOptions?: HTMLInputElement[];  // only set when fieldType === 'radio'
 }
 
 export interface AutofillResult {

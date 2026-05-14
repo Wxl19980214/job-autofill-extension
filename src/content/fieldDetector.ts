@@ -4,7 +4,6 @@
 import type { DetectedField, FieldType } from '../shared/profileTypes';
 import { matchFieldToProfile } from './fieldMatcher';
 
-// Exclude non-fillable input types and disabled elements
 const FILLABLE_SELECTOR = [
   'input:not([type="hidden"]):not([type="submit"]):not([type="button"])',
   ':not([type="reset"]):not([type="image"]):not([type="file"])',
@@ -28,7 +27,6 @@ function getFieldType(el: HTMLElement): FieldType {
   if (type === 'tel') return 'tel';
   if (type === 'url') return 'url';
   if (type === 'checkbox') return 'checkbox';
-  // radio inputs are skipped (handled via radio-group logic — future work)
   return 'text';
 }
 
@@ -63,7 +61,6 @@ function getLabelText(el: HTMLElement): string {
   const parent = el.parentElement;
   if (!parent) return '';
 
-  // Sibling <label>, <span>, <div>, <legend> that doesn't contain the field
   const candidates = parent.querySelectorAll('label, span, legend, [class*="label"], [class*="Label"]');
   for (const candidate of Array.from(candidates)) {
     if (!candidate.contains(el)) {
@@ -72,7 +69,7 @@ function getLabelText(el: HTMLElement): string {
     }
   }
 
-  // Grandparent — for deeply nested fields like Workday's custom components
+  // 5. Grandparent — for deeply nested fields like Workday's custom components
   const gp = parent.parentElement;
   if (gp) {
     const gpLabel = gp.querySelector('label, legend, [data-automation-id*="label"]');
@@ -92,11 +89,15 @@ export function extractSignals(el: HTMLElement): string {
   const label       = getLabelText(el);
   const ariaLabel   = el.getAttribute('aria-label') ?? '';
   const placeholder = input.placeholder ?? '';
-  const name        = (input.name ?? '').replace(/[_-]/g, ' ');
-  const id          = (el.id ?? '').replace(/[_-]/g, ' ');
+  const normAttr = (raw: string) =>
+    raw
+      .replace(/\[([^\]]+)\]/g, ' $1')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[_-]/g, ' ');
+  const name        = normAttr(input.name ?? '');
+  const id          = normAttr(el.id ?? '');
   const dataField   = el.getAttribute('data-field') ?? el.getAttribute('data-name') ?? '';
 
-  // Order matters: most-specific signals first for debugging readability
   if (label)       parts.push(label);
   if (ariaLabel)   parts.push(ariaLabel);
   if (placeholder) parts.push(placeholder);
@@ -113,7 +114,6 @@ function isVisible(el: HTMLElement): boolean {
   return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
 }
 
-// Skip elements that are clearly interactive controls, not data entry fields
 function isButtonLike(el: HTMLElement): boolean {
   const role = el.getAttribute('role') ?? '';
   if (role === 'button' || role === 'link' || role === 'menuitem') return true;
@@ -121,7 +121,6 @@ function isButtonLike(el: HTMLElement): boolean {
   const tag = el.tagName.toLowerCase();
   if (tag === 'button' || tag === 'a') return true;
 
-  // Inputs that look like buttons by class name
   const cls = (el.className ?? '').toString().toLowerCase();
   if (
     cls.includes('btn') ||
@@ -136,26 +135,116 @@ function isButtonLike(el: HTMLElement): boolean {
   return false;
 }
 
+// Extract the question text for a radio group by walking up the DOM from one member.
+function getRadioGroupLabel(anyMember: HTMLInputElement): string {
+  // Strategy 1: enclosing <fieldset> → <legend>
+  const fieldset = anyMember.closest('fieldset');
+  if (fieldset) {
+    const legend = fieldset.querySelector('legend');
+    if (legend) {
+      const text = legend.textContent?.trim() ?? '';
+      if (text) return text;
+    }
+  }
+
+  // Strategy 2: closest [role="group"] with aria-labelledby or aria-label
+  const group = anyMember.closest('[role="group"]');
+  if (group) {
+    const labelledBy = group.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const labelEl = document.getElementById(labelledBy);
+      const text = labelEl?.textContent?.trim() ?? '';
+      if (text) return text;
+    }
+    const ariaLabel = group.getAttribute('aria-label') ?? '';
+    if (ariaLabel) return ariaLabel;
+  }
+
+  // Strategy 3: walk up looking for a sibling/ancestor that contains the question text.
+  // Stop after 5 levels to avoid capturing unrelated page text.
+  let el: HTMLElement | null = anyMember.parentElement;
+  for (let depth = 0; depth < 5 && el; depth++) {
+    const prev = el.previousElementSibling as HTMLElement | null;
+    if (prev) {
+      const text = prev.textContent?.trim() ?? '';
+      if (text && text.length > 4 && text.length < 200) return text;
+    }
+    const heading = el.querySelector('h1,h2,h3,h4,h5,h6,label,p');
+    if (heading && !heading.contains(anyMember)) {
+      const text = heading.textContent?.trim() ?? '';
+      if (text && text.length > 4 && text.length < 200) return text;
+    }
+    el = el.parentElement;
+  }
+
+  return '';
+}
+
+// Detect all radio groups on the page. Returns one DetectedField per group.
+function detectRadioGroups(): DetectedField[] {
+  const allRadios = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[type="radio"]:not([disabled])')
+  ).filter(isVisible);
+
+  const groups = new Map<string, HTMLInputElement[]>();
+  for (const radio of allRadios) {
+    const name = radio.name || radio.id || Math.random().toString();
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name)!.push(radio);
+  }
+
+  const results: DetectedField[] = [];
+
+  for (const [, options] of groups) {
+    if (options.length < 2) continue;
+
+    const firstOption = options[0];
+    const questionText = getRadioGroupLabel(firstOption);
+    if (!questionText) continue;
+
+    const signals = questionText.toLowerCase();
+    const match = matchFieldToProfile(signals, 'radio');
+
+    const container: HTMLElement =
+      (firstOption.closest('fieldset') as HTMLElement | null) ??
+      (firstOption.closest('[role="group"]') as HTMLElement | null) ??
+      firstOption.parentElement ??
+      firstOption;
+
+    const checkedOption = options.find((r) => r.checked);
+    const checkedLabel = checkedOption
+      ? (getLabelText(checkedOption) || checkedOption.value)
+      : '';
+
+    results.push({
+      element: container,
+      fieldType: 'radio',
+      signals,
+      profileKey:   match?.key    ?? null,
+      confidence:   match?.confidence ?? 0,
+      currentValue: checkedLabel,
+      radioOptions: options,
+    });
+  }
+
+  return results;
+}
+
 export function detectFields(): DetectedField[] {
   const elements = Array.from(document.querySelectorAll<HTMLElement>(ALL_SELECTORS));
   const fields: DetectedField[] = [];
 
   for (const el of elements) {
-    if ((el as HTMLInputElement).type === 'radio') continue; // radio group logic is future work
+    if ((el as HTMLInputElement).type === 'radio') continue; // handled by detectRadioGroups below
     if (isButtonLike(el)) continue;
 
     const tag = el.tagName.toLowerCase();
-    // Always process native <select> even when visually hidden — many sites
-    // (including Greenhouse) hide the real <select> with CSS and overlay a
-    // custom React/jQuery UI component on top, but the underlying <select>
-    // value can still be set programmatically.
     if (tag !== 'select' && !isVisible(el)) continue;
 
     const fieldType    = getFieldType(el);
     const signals      = extractSignals(el);
     const currentValue = getCurrentValue(el);
 
-    // Ignore fields with no detectable identity signals
     if (!signals.trim()) continue;
 
     const match = matchFieldToProfile(signals, fieldType);
@@ -169,6 +258,9 @@ export function detectFields(): DetectedField[] {
       currentValue,
     });
   }
+
+  // Append radio groups after the regular fields
+  fields.push(...detectRadioGroups());
 
   return fields;
 }

@@ -9,6 +9,7 @@ import {
   highlightAmbiguous,
   clearHighlights,
 } from './highlighter';
+import { isCustomDropdown, fillCustomDropdown } from './dropdownFiller';
 import { CONFIDENCE_THRESHOLD_HIGH, CONFIDENCE_THRESHOLD_LOW } from '../shared/constants';
 
 // ── Value resolution ──────────────────────────────────────────────────────────
@@ -62,26 +63,43 @@ function fillContentEditable(el: HTMLElement, value: string) {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-// Tries exact then partial option matching; returns true on success
-function fillSelect(el: HTMLSelectElement, value: string): boolean {
-  const norm = value.toLowerCase().trim();
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
 
-  for (const opt of Array.from(el.options)) {
-    if (opt.value.toLowerCase() === norm || opt.text.toLowerCase() === norm) {
-      el.value = opt.value;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
+// Score how well an option matches the target value (0 = no match, higher = better)
+function scoreOption(optText: string, optValue: string, target: string): number {
+  const t   = normalizeForMatch(target);
+  const txt = normalizeForMatch(optText);
+  const val = normalizeForMatch(optValue);
+
+  if (txt === t || val === t) return 100;           // exact
+  if (txt.startsWith(t) || t.startsWith(txt)) return 80; // prefix
+  if (txt.includes(t) || val.includes(t)) return 60;     // contains
+  if (t.includes(txt) && txt.length > 2) return 40;      // target contains option text
+  return 0;
+}
+
+// Tries to find the best-matching option using fuzzy scoring; returns true on success
+function fillSelect(el: HTMLSelectElement, value: string): boolean {
+  const opts = Array.from(el.options).filter((o) => o.value !== '');
+
+  let bestOpt: HTMLOptionElement | null = null;
+  let bestScore = 0;
+
+  for (const opt of opts) {
+    const s = scoreOption(opt.text, opt.value, value);
+    if (s > bestScore) {
+      bestScore = s;
+      bestOpt = opt;
     }
   }
 
-  // Partial match — e.g. profile "H1B" matching option "H-1B Visa"
-  for (const opt of Array.from(el.options)) {
-    const optNorm = opt.text.toLowerCase();
-    if (optNorm.includes(norm) || norm.includes(opt.value.toLowerCase())) {
-      el.value = opt.value;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    }
+  if (bestOpt && bestScore >= 40) {
+    el.value = bestOpt.value;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('input',  { bubbles: true }));
+    return true;
   }
 
   return false;
@@ -97,60 +115,83 @@ function fillCheckbox(el: HTMLInputElement, value: boolean) {
 
 // ── Main exports ──────────────────────────────────────────────────────────────
 
-export function autofillPage(profile: UserProfile, allowOverwrite = false): AutofillResult {
+async function fillHighConfidenceField(
+  field: DetectedField,
+  enriched: UserProfile,
+  result: AutofillResult
+): Promise<void> {
+  const { profileKey, fieldType, element } = field;
+  if (!profileKey) return;
+
+  const rawVal = enriched[profileKey];
+  const strVal = resolveStringValue(enriched, field);
+
+  // Custom (non-native) dropdown — click-to-open approach
+  if (fieldType !== 'select' && fieldType !== 'checkbox' && isCustomDropdown(element)) {
+    if (strVal) {
+      const ok = await fillCustomDropdown(element, strVal);
+      if (ok) {
+        highlightFilled(element, profileKey);
+        result.filled++;
+      } else {
+        highlightAmbiguous(element);
+        result.skipped++;
+      }
+    }
+    return;
+  }
+
+  if (fieldType === 'select') {
+    if (strVal && fillSelect(element as HTMLSelectElement, strVal)) {
+      highlightFilled(element, profileKey);
+      result.filled++;
+    } else {
+      highlightAmbiguous(element);
+      result.skipped++;
+    }
+  } else if (fieldType === 'checkbox') {
+    if (typeof rawVal === 'boolean') {
+      fillCheckbox(element as HTMLInputElement, rawVal);
+      highlightFilled(element, profileKey);
+      result.filled++;
+    } else {
+      result.skipped++;
+    }
+  } else if (fieldType === 'contenteditable') {
+    if (strVal) {
+      fillContentEditable(element, strVal);
+      highlightFilled(element, profileKey);
+      result.filled++;
+    } else {
+      result.skipped++;
+    }
+  } else {
+    if (strVal) {
+      setNativeValue(element, strVal);
+      highlightFilled(element, profileKey);
+      result.filled++;
+    } else {
+      result.skipped++;
+    }
+  }
+}
+
+export async function autofillPage(profile: UserProfile, allowOverwrite = false): Promise<AutofillResult> {
   clearHighlights();
   const enriched = enrichProfile(profile);
   const fields   = detectFields();
   const result: AutofillResult = { filled: 0, suggested: 0, skipped: 0 };
 
   for (const field of fields) {
-    // Respect existing user-entered content unless overwrite is explicitly requested
     if (field.currentValue && !allowOverwrite) {
       result.skipped++;
       continue;
     }
 
-    const { confidence, profileKey, fieldType, element } = field;
+    const { confidence, profileKey, element } = field;
 
     if (confidence >= CONFIDENCE_THRESHOLD_HIGH && profileKey) {
-      const rawVal = enriched[profileKey];
-
-      if (fieldType === 'select') {
-        const strVal = resolveStringValue(enriched, field);
-        if (strVal && fillSelect(element as HTMLSelectElement, strVal)) {
-          highlightFilled(element, profileKey);
-          result.filled++;
-        } else {
-          highlightAmbiguous(element);
-          result.skipped++;
-        }
-      } else if (fieldType === 'checkbox') {
-        if (typeof rawVal === 'boolean') {
-          fillCheckbox(element as HTMLInputElement, rawVal);
-          highlightFilled(element, profileKey);
-          result.filled++;
-        } else {
-          result.skipped++;
-        }
-      } else if (fieldType === 'contenteditable') {
-        const strVal = resolveStringValue(enriched, field);
-        if (strVal) {
-          fillContentEditable(element, strVal);
-          highlightFilled(element, profileKey);
-          result.filled++;
-        } else {
-          result.skipped++;
-        }
-      } else {
-        const strVal = resolveStringValue(enriched, field);
-        if (strVal) {
-          setNativeValue(element, strVal);
-          highlightFilled(element, profileKey);
-          result.filled++;
-        } else {
-          result.skipped++;
-        }
-      }
+      await fillHighConfidenceField(field, enriched, result);
     } else if (confidence >= CONFIDENCE_THRESHOLD_LOW && profileKey) {
       const strVal = resolveStringValue(enriched, field);
       if (strVal) {
@@ -169,6 +210,7 @@ export function autofillPage(profile: UserProfile, allowOverwrite = false): Auto
 }
 
 export function highlightAllFields(profile: UserProfile): void {
+  // Synchronous preview — shows what would be filled without actually filling
   clearHighlights();
   const enriched = enrichProfile(profile);
   const fields   = detectFields();

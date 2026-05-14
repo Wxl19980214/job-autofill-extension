@@ -32,6 +32,9 @@ export const DEFAULT_PROFILE: UserProfile = {
   major: 'Computer Science',
   graduationYear: '2023',
 
+  // Location
+  country: 'United States',
+
   // Free-text answers
   whyInterested: '',
   aboutYourself:
@@ -39,6 +42,14 @@ export const DEFAULT_PROFILE: UserProfile = {
     'specializing in Java, Flink, Kafka, and Spark. Led high-throughput data platform work and ' +
     'real-time streaming pipelines supporting millions of records.',
   howUseAI: '',
+
+  // EEO — values are fuzzy-matched against dropdown option text
+  eeoGender: 'Man',
+  eeoRace: 'Asian',
+  eeoHispanic: 'No',
+  eeoVeteran: 'I am not a protected veteran',
+  eeoDisability: "No, I don't have a disability",
+  eeoTransgender: 'No',
 };
 
 export async function getProfile(): Promise<UserProfile> {

@@ -35,6 +35,18 @@ export interface UserProfile {
   whyInterested: string;
   aboutYourself: string;
   howUseAI: string;
+
+  // Location
+  country: string;
+
+  // EEO / self-identification (values should match the option text on the form,
+  // partial matching is used so "Asian" matches "Asian (not Hispanic or Latino)")
+  eeoGender: string;
+  eeoRace: string;
+  eeoHispanic: string;
+  eeoVeteran: string;
+  eeoDisability: string;
+  eeoTransgender: string;
 }
 
 export type ProfileKey = keyof UserProfile;

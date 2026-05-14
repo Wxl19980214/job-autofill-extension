@@ -185,6 +185,9 @@ export default function Options() {
         <Field label="Location" hint="Used for combined City/State fields">
           <TextInput profile={profile} k="location" update={u} />
         </Field>
+        <Field label="Country">
+          <TextInput profile={profile} k="country" update={u} />
+        </Field>
         <Field label="LinkedIn URL">
           <TextInput profile={profile} k="linkedinUrl" type="url" update={u} />
         </Field>
@@ -289,6 +292,32 @@ export default function Options() {
           <span style={{ fontSize: 12, color: '#f59e0b' }}>Unsaved changes</span>
         )}
       </div>
+
+      {/* ── EEO / Self-identification ── */}
+      <Section title="EEO / Self-Identification">
+        <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8, lineHeight: 1.5 }}>
+          Values are fuzzy-matched against dropdown options — "Asian" will match "Asian (not Hispanic or Latino)".
+          Leave blank to skip these fields.
+        </p>
+        <Field label="Gender">
+          <TextInput profile={profile} k="eeoGender" update={u} />
+        </Field>
+        <Field label="Race">
+          <TextInput profile={profile} k="eeoRace" update={u} />
+        </Field>
+        <Field label="Hispanic / Latinx">
+          <TextInput profile={profile} k="eeoHispanic" update={u} />
+        </Field>
+        <Field label="Transgender">
+          <TextInput profile={profile} k="eeoTransgender" update={u} />
+        </Field>
+        <Field label="Veteran Status" hint='e.g. "I am not a protected veteran"'>
+          <TextInput profile={profile} k="eeoVeteran" update={u} />
+        </Field>
+        <Field label="Disability Status" hint={"e.g. \"No, I don't have a disability\""} >
+          <TextInput profile={profile} k="eeoDisability" update={u} />
+        </Field>
+      </Section>
 
       {/* ── Future enhancements note ── */}
       <div style={{

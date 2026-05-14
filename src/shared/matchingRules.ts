@@ -70,8 +70,10 @@ export const MATCH_RULES: MatchRule[] = [
       /\bcity[\s_-]?name\b/i,
       /\btown\b/i,
       /\bcity[\s_-]?of[\s_-]?residence\b/i,
+      // "Location (City)" label used by Greenhouse and others
+      /location\s*\(?\s*city\s*\)?/i,
     ],
-    weight: 0.88,
+    weight: 0.90,
   },
   {
     key: 'state',
@@ -83,13 +85,22 @@ export const MATCH_RULES: MatchRule[] = [
     weight: 0.85,
   },
   {
+    key: 'country',
+    patterns: [
+      /\bcountry\b/i,
+      /\bnation\b/i,
+      /\bcountry[\s_-]?of[\s_-]?(residence|origin|citizenship)\b/i,
+    ],
+    weight: 0.92,
+  },
+  {
     key: 'location',
     patterns: [
-      /\blocation\b/i,
+      // Only match plain "location" — NOT "location (city)" which is handled by city rule above
+      /^location$/i,
       /\bcity[\s,\/]?state\b/i,
       /\bwhere[\s_-]?are[\s_-]?you[\s_-]?(located|based)\b/i,
       /\bcurrent[\s_-]?location\b/i,
-      /\baddress\b/i,
     ],
     weight: 0.72,
   },
@@ -291,5 +302,63 @@ export const MATCH_RULES: MatchRule[] = [
       /how[\s_-]?you[\s_-]?leverage[\s_-]?ai/i,
     ],
     weight: 0.88,
+  },
+
+  // ── EEO / Self-identification ──────────────────────────────────────────────
+  // Values are fuzzy-matched, so "Asian" matches "Asian (not Hispanic or Latino)"
+  {
+    key: 'eeoGender',
+    patterns: [/\bgender\b/i, /\bsex\b(?!ual)/i],
+    weight: 0.88,
+  },
+  {
+    key: 'eeoRace',
+    patterns: [
+      /\brace\b/i,
+      /\bracial[\s_-]?background\b/i,
+      /\brace[\s_-]?\/[\s_-]?ethnicity\b/i,
+      // Don't match plain "ethnicity" — covered by eeoHispanic below
+    ],
+    weight: 0.85,
+  },
+  {
+    key: 'eeoHispanic',
+    patterns: [
+      /\bhispanic\b/i,
+      /\blatinx?\b/i,
+      /\blatino\b/i,
+      /\blatina\b/i,
+      /\bethnic[\s_-]?origin\b/i,
+    ],
+    weight: 0.90,
+  },
+  {
+    key: 'eeoVeteran',
+    patterns: [
+      /\bveteran\b/i,
+      /\bmilitary[\s_-]?status\b/i,
+      /\barmed[\s_-]?forces\b/i,
+      /\bprotected[\s_-]?veteran\b/i,
+    ],
+    weight: 0.88,
+  },
+  {
+    key: 'eeoDisability',
+    patterns: [
+      /\bdisabilit/i,
+      /\bhandicap\b/i,
+      /\bdisabled\b/i,
+      /\baccommodat/i,
+    ],
+    weight: 0.88,
+  },
+  {
+    key: 'eeoTransgender',
+    patterns: [
+      /\btransgender\b/i,
+      /\btrans[\s_-]?identity\b/i,
+      /\bgender[\s_-]?identit/i,
+    ],
+    weight: 0.90,
   },
 ];

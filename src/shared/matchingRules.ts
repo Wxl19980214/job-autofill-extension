@@ -92,7 +92,9 @@ export const MATCH_RULES: MatchRule[] = [
       /\bnation\b/i,
       /\bcountry[\s_-]?of[\s_-]?(residence|origin|citizenship)\b/i,
     ],
-    weight: 0.92,
+    // Lowered so work-auth/sponsorship questions that mention "country" in their label
+    // don't get hijacked by this rule (authorizedToWork/requiresSponsorship are 0.95)
+    weight: 0.82,
   },
   {
     key: 'location',
@@ -201,7 +203,8 @@ export const MATCH_RULES: MatchRule[] = [
       /\bus[\s_-]?work[\s_-]?auth/i,
       /\bcan[\s_-]?you[\s_-]?legally[\s_-]?work\b/i,
     ],
-    weight: 0.90,
+    // Higher than country (0.82) — work-auth labels often contain "country"
+    weight: 0.95,
   },
   {
     key: 'requiresSponsorship',
@@ -212,7 +215,8 @@ export const MATCH_RULES: MatchRule[] = [
       /\bneed[\s_-]?sponsor/i,
       /\bwork[\s_-]?visa[\s_-]?sponsor/i,
     ],
-    weight: 0.92,
+    // Higher than country (0.82) — sponsorship labels often contain "country"
+    weight: 0.95,
   },
 
   // ── Education ─────────────────────────────────────────────────────────────
